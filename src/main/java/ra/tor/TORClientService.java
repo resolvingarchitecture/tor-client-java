@@ -1,12 +1,16 @@
 package ra.tor;
 
+import ra.common.messaging.MessageProducer;
+import ra.common.network.NetworkPacket;
+import ra.common.network.NetworkPeer;
+import ra.common.network.NetworkSession;
+import ra.common.network.NetworkStatus;
+import ra.common.service.BaseService;
+import ra.common.service.ServiceStatusListener;
 import ra.tor.embedded.TORSessionEmbedded;
 import ra.tor.local.TORSensorSessionLocal;
 
 import ra.common.Envelope;
-import ra.common.Network;
-import ra.common.NetworkPacket;
-import ra.common.NetworkPeer;
 import ra.util.Wait;
 
 import java.io.File;
@@ -20,9 +24,9 @@ import java.util.logging.Logger;
  * TODO: Add local node as Tor Hidden Service accepting local Tor calls
  *
  */
-public final class TOR extends BaseSensor {
+public final class TORClientService extends BaseService {
 
-    private static final Logger LOG = Logger.getLogger(io.onemfive.network.sensors.tor.TOR.class.getName());
+    private static final Logger LOG = Logger.getLogger(TORClientService.class.getName());
 
     public static final String TOR_ROUTER_EMBEDDED = "settings.network.tor.routerEmbedded";
     public static final String TOR_HIDDENSERVICES_CONFIG = "settings.network.tor.hiddenServicesConfig";
@@ -32,7 +36,7 @@ public final class TOR extends BaseSensor {
     private Process tor;
 
     static {
-        seedATOR = new NetworkPeer(Network.TOR);
+        seedATOR = new NetworkPeer(TORClientService.class.getName());
         seedATOR.setId("+sKVViuz2FPsl/XQ+Da/ivbNfOI=");
         seedATOR.setPort(35910); // virtual port
         seedATOR.getDid().getPublicKey().setAddress("5pdavjxcwrfx2meu");
@@ -42,68 +46,47 @@ public final class TOR extends BaseSensor {
         seedATOR.getDid().getPublicKey().setBase64Encoded(true);
     }
 
-    private NetworkPeerDiscovery discovery;
-
     private File sensorDir;
     private boolean embedded = false;
-    private final Map<String, SensorSession> sessions = new HashMap<>();
+    private final Map<String, NetworkSession> sessions = new HashMap<>();
     private Thread taskRunnerThread;
 
-    public TOR() {
-        super(Network.TOR);
-        taskRunner = new TaskRunner(1, 1);
+    public TORClientService() {
     }
 
-    public TOR(SensorManager sensorManager) {
-        super(sensorManager, Network.TOR);
-        taskRunner = new TaskRunner(1, 1);
+    public TORClientService(MessageProducer producer, ServiceStatusListener listener) {
+        super(producer, listener);
     }
 
-    public String[] getOperationEndsWith() {
-        return new String[]{".onion"};
-    }
-
-    @Override
-    public String[] getURLBeginsWith() {
-        return new String[]{"tor"};
-    }
-
-    @Override
-    public String[] getURLEndsWith() {
-        return new String[]{".onion"};
-    }
-
-    @Override
     public boolean sendOut(NetworkPacket packet) {
         LOG.info("Tor Sensor sending request...");
-        ProtocolSession sensorSession = establishSession(null, true);
+        NetworkSession sensorSession = establishSession(null, true);
         if(sensorSession==null) {
             return false;
         }
         boolean successful = sensorSession.send(packet);
         if (successful) {
             LOG.info("Tor Sensor successful response received.");
-            if (!getStatus().equals(SensorStatus.NETWORK_CONNECTED)) {
+            if (!getStatus().equals(NetworkStatus.NETWORK_CONNECTED)) {
                 LOG.info("Tor Network status changed back to CONNECTED.");
-                updateStatus(SensorStatus.NETWORK_CONNECTED);
+                updateStatus(NetworkStatus.NETWORK_CONNECTED);
             }
         }
         return successful;
     }
 
-    @Override
-    public ProtocolSession establishSession(String address, Boolean autoConnect) {
+    public NetworkSession establishSession(String address, Boolean autoConnect) {
         if(address==null) {
             address = "127.0.0.1";
         }
         if(sessions.get(address)==null) {
-            ProtocolSession sensorSession = embedded ? new TORSessionEmbedded(this) : new TORSensorSessionLocal(this);
+            NetworkSession networkSession = embedded ? new TORSessionEmbedded(this) : new TORSensorSessionLocal(this);
 
-            if(sensorSession.init(properties) && sensorSession.open(address)) {
+            if(networkSession.init(config) && networkSession.open(address)) {
                 if (autoConnect) {
-                    sensorSession.connect();
+                    networkSession.connect();
                 }
-                sessions.put(address, sensorSession);
+                sessions.put(address, networkSession);
                 return sessions.get(address);
             }
         }
