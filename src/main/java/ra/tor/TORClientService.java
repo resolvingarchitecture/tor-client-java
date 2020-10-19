@@ -5,13 +5,9 @@ import ra.common.network.*;
 import ra.common.service.ServiceStatus;
 import ra.common.service.ServiceStatusListener;
 
-import ra.common.Envelope;
 import ra.http.client.HTTPClientService;
 import ra.util.Config;
-import ra.util.Wait;
 
-import java.io.File;
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.util.*;
@@ -40,41 +36,6 @@ public final class TORClientService extends HTTPClientService {
         super(producer, listener, strategy);
     }
 
-//    public Boolean sendOut(Envelope e) {
-//        LOG.info("Tor Sensor sending request...");
-//        NetworkClientSession sensorSession = establishSession(null, true);
-//        if(sensorSession==null) {
-//            return false;
-//        }
-//        boolean successful = sensorSession.send(e);
-//        if (successful) {
-//            LOG.info("Tor Sensor successful response received.");
-//            if (!getServiceStatus().equals(ServiceStatus.RUNNING)) {
-//                LOG.info("Tor Network status changed back to CONNECTED.");
-//                updateStatus(ServiceStatus.RUNNING);
-//            }
-//        }
-//        return successful;
-//    }
-
-//    public NetworkClientSession establishSession(String address, Boolean autoConnect) {
-//        if(address==null) {
-//            address = "127.0.0.1";
-//        }
-//        if(sessions.get(address)==null) {
-//            NetworkClientSession networkSession = new TORSensorSessionLocal(this);
-//
-//            if(networkSession.init(config) && networkSession.open(address)) {
-//                if (autoConnect) {
-//                    networkSession.connect();
-//                }
-//                sessions.put(address, networkSession);
-//                return sessions.get(address);
-//            }
-//        }
-//        return null;
-//    }
-
     @Override
     public boolean start(Properties properties) {
         LOG.info("Starting TOR Sensor...");
@@ -89,28 +50,6 @@ public final class TORClientService extends HTTPClientService {
         proxy = new Proxy(Proxy.Type.SOCKS, new InetSocketAddress(HOST, PORT_SOCKS));
 
         super.start(properties);
-
-//        NetworkClientSession torSession = null;
-//        do {
-//            torSession = establishSession("127.0.0.1", true);
-//            LOG.info(getStatus().name());
-//            if(getStatus()==SensorStatus.NETWORK_UNAVAILABLE) {
-//                if(!embedded) {
-//                    LOG.info("TOR Unavailable and not embedded; attempting to start TOR externally...");
-//                    try {
-//                        tor = Runtime.getRuntime().exec("tor");
-//                        LOG.info("TOR (pid="+tor.pid()+") started. Waiting a few seconds to warm up...");
-//                        // Give some room for TOR to start up
-//                        updateStatus(SensorStatus.NETWORK_WARMUP);
-//                        Wait.aSec(3);
-//                    } catch (IOException e) {
-//                        LOG.warning(e.getLocalizedMessage());
-//                    }
-//                }
-//            } else if(getServiceStatus()!=ServiceStatus.NETWORK_CONNECTING) {
-//                updateStatus(SensorStatus.NETWORK_CONNECTING);
-//            }
-//        } while(torSession == null || !torSession.isConnected());
         updateStatus(ServiceStatus.RUNNING);
 //        kickOffDiscovery();
         return true;
