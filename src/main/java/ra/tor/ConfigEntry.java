@@ -1,4 +1,4 @@
-package ra.tor.local.control;
+package ra.tor;
 
 /** A single key-value pair from Tor's configuration. */
 public class ConfigEntry {

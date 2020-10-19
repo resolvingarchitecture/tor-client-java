@@ -1,4 +1,4 @@
-package ra.tor.local.control;
+package ra.tor;
 
 import java.util.Arrays;
 import java.util.List;

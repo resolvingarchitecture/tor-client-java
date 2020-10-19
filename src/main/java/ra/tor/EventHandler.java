@@ -1,4 +1,4 @@
-package ra.tor.local.control;
+package ra.tor;
 
 /**
  * Abstract interface whose methods are invoked when Tor sends us an event.

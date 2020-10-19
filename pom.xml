@@ -16,7 +16,8 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<java.version>1.8</java.version>
+		<java.version>1.15</java.version>
+        <ra.version>1.0.0</ra.version>
 	</properties>
 
 	<scm>
@@ -37,13 +38,13 @@
 		<dependency>
 			<groupId>resolvingarchitecture</groupId>
 			<artifactId>common</artifactId>
-			<version>1.0.0</version>
+			<version>${ra.version}</version>
 		</dependency>
 
         <dependency>
             <groupId>resolvingarchitecture</groupId>
             <artifactId>http-client</artifactId>
-            <version>1.0.0</version>
+            <version>${ra.version}</version>
         </dependency>
 
 		<!-- Test -->
@@ -107,7 +108,7 @@
 					<artifactId>maven-compiler-plugin</artifactId>
 					<version>3.8.0</version>
                     <configuration>
-                        <release>11</release>
+                        <release>15</release>
                     </configuration>
 				</plugin>
 			</plugins>
@@ -129,27 +130,6 @@
 <!--                    <mainClass>io.onemfive.OneMFivePlatform</mainClass>-->
 <!--                </configuration>-->
 <!--            </plugin>-->
-			<plugin>
-				<artifactId>maven-assembly-plugin</artifactId>
-				<executions>
-					<execution>
-						<phase>package</phase>
-						<goals>
-							<goal>single</goal>
-						</goals>
-					</execution>
-				</executions>
-				<configuration>
-					<archive>
-						<manifest>
-							<mainClass>ra.btc.Daemon</mainClass>
-						</manifest>
-					</archive>
-					<descriptorRefs>
-						<descriptorRef>jar-with-dependencies</descriptorRef>
-					</descriptorRefs>
-				</configuration>
-			</plugin>
 <!--			<plugin>-->
 <!--				<groupId>org.apache.maven.plugins</groupId>-->
 <!--				<artifactId>maven-project-info-reports-plugin</artifactId>-->
