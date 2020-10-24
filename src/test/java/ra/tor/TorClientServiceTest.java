@@ -55,6 +55,8 @@ public class TorClientServiceTest {
         try {
             // Secure Drop Onion Site
             envelope.setURL(new URL("http://sdolvtfhatvsysc6l34d65ymdwxcujausv7k5jk4cy5ttzhjoi6fzvyd.onion"));
+            // DuckDuckGo
+//            envelope.setURL(new URL("http://3g2upl4pq6kufc4m.onion"));
         } catch (MalformedURLException e) {
             LOG.severe(e.getLocalizedMessage());
             Assert.fail();
@@ -65,14 +67,15 @@ public class TorClientServiceTest {
         service.sendOut(envelope);
         String html = new String((byte[]) DLC.getContent(envelope));
         LOG.info(html);
-        Assert.assertTrue(html.contains("<title>\n" +
-                "\t\t\t\t\n" +
-                "\t\t\t\t\tShare and accept documents securely\n" +
-                "\t\t\t\t\n" +
-                "\t\t\t\t\n" +
-                "\t\t\t\t\t- SecureDrop\n" +
-                "\t\t\t\t\n" +
-                "\t\t\t</title>"));
+//        Assert.assertTrue(html.contains("<title>\n" +
+//                "\t\t\t\t\n" +
+//                "\t\t\t\t\tShare and accept documents securely\n" +
+//                "\t\t\t\t\n" +
+//                "\t\t\t\t\n" +
+//                "\t\t\t\t\t- SecureDrop\n" +
+//                "\t\t\t\t\n" +
+//                "\t\t\t</title>"));
+        Assert.assertTrue(html.contains("{op=200}"));
     }
 
 }
