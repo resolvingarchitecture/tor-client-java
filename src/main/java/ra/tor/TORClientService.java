@@ -34,8 +34,8 @@ public final class TORClientService extends HTTPClientService {
     private Thread taskRunnerThread;
     private Properties config;
 
-    public TORClientService(MessageProducer producer, ServiceStatusListener listener, NetworkBuilderStrategy strategy) {
-        super(producer, listener, strategy);
+    public TORClientService(MessageProducer producer, ServiceStatusListener listener) {
+        super("Tor", producer, listener);
     }
 
     @Override
