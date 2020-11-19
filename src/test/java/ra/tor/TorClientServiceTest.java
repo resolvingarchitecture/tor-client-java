@@ -44,6 +44,9 @@ public class TorClientServiceTest {
 
     @Test
     public void verifyInitializedTest() {
+        if(!ready) {
+            LOG.warning("Service not ready - ensure Tor is running.");
+        }
         Assert.assertTrue(ready);
     }
 
@@ -63,14 +66,18 @@ public class TorClientServiceTest {
         service.sendOut(envelope);
         String html = new String((byte[]) DLC.getContent(envelope));
         LOG.info(html);
-        Assert.assertTrue(html.contains("<title>\n" +
+        String secureDropHTML = "<title>\n" +
                 "\t\t\t\t\n" +
                 "\t\t\t\t\tShare and accept documents securely\n" +
                 "\t\t\t\t\n" +
                 "\t\t\t\t\n" +
                 "\t\t\t\t\t- SecureDrop\n" +
                 "\t\t\t\t\n" +
-                "\t\t\t</title>"));
+                "\t\t\t</title>";
+        if(!html.contains(secureDropHTML)) {
+            LOG.warning("Verify Secure Drop onion site is accessible at: http://sdolvtfhatvsysc6l34d65ymdwxcujausv7k5jk4cy5ttzhjoi6fzvyd.onion");
+        }
+        Assert.assertTrue(html.contains(secureDropHTML));
 //        Assert.assertTrue(html.contains("{op=200}"));
     }
 
