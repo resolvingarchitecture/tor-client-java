@@ -5,7 +5,7 @@ import ra.common.Envelope;
 import ra.common.messaging.MessageProducer;
 import ra.common.network.*;
 import ra.common.service.ServiceStatus;
-import ra.common.service.ServiceStatusListener;
+import ra.common.service.ServiceStatusObserver;
 
 import ra.http.client.HTTPClientService;
 import ra.util.Config;
@@ -34,8 +34,8 @@ public final class TORClientService extends HTTPClientService {
     private Thread taskRunnerThread;
     private Properties config;
 
-    public TORClientService(MessageProducer producer, ServiceStatusListener listener) {
-        super("Tor", producer, listener);
+    public TORClientService(MessageProducer producer, ServiceStatusObserver observer) {
+        super("Tor", producer, observer);
     }
 
     @Override
