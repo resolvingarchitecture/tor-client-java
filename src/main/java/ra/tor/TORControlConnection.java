@@ -805,6 +805,127 @@ public class TORControlConnection implements TORControlCommands {
         sendAndWaitForResponse("FORGETHS " + hostname + "\r\n", null);
     }
 
+    /**
+     * "ADD_ONION" SP KeyType ":" KeyBlob [SP "Flags=" Flag *("," Flag)] [SP
+     * "MaxStreams=" NumStreams] 1*(SP "Port=" VirtPort ["," Target]) (SP
+     * "ClientAuth=" ClientName [":" ClientBlob]) CRLF
+     *
+     * KeyType = "NEW" / ; The server should generate a key of algorithm KeyBlob
+     * "RSA1024" / ; The server should use the 1024 bit RSA key provided in as
+     * KeyBlob "ED25519-V3"; The server should use the ed25519 v3 key provided in as
+     * KeyBlob
+     *
+     * KeyBlob = "BEST" / ; The server should generate a key using the "best"
+     * supported algorithm (KeyType == "NEW") "RSA1024" / ; The server should
+     * generate a 1024 bit RSA key (KeyType == "NEW") "ED25519-V3"; The server
+     * should generate an ed25519 private key (KeyType == "NEW") String ; A
+     * serialized private key (without whitespace)
+     *
+     * Flag = "DiscardPK" / ; The server should not include the newly generated
+     * private key as part of the response. "Detach" / ; Do not associate the newly
+     * created Onion Service to the current control connection. "BasicAuth" / ;
+     * Client authorization is required using the "basic" method. "NonAnonymous" /;
+     * Add a non-anonymous Single Onion Service. Tor checks this flag matches its
+     * configured hidden service anonymity mode. "MaxStreamsCloseCircuit"; Close the
+     * circuit is the maximum streams allowed is reached.
+     *
+     * NumStreams = A value between 0 and 65535 which is used as the maximum streams
+     * that can be attached on a rendezvous circuit. Setting it to 0 means unlimited
+     * which is also the default behavior.
+     *
+     * VirtPort = The virtual TCP Port for the Onion Service (As in the
+     * HiddenServicePort "VIRTPORT" argument).
+     *
+     * Target = The (optional) target for the given VirtPort (As in the optional
+     * HiddenServicePort "TARGET" argument).
+     *
+     * ClientName = An identifier 1 to 16 characters long, using only characters in
+     * A-Za-z0-9+-_ (no spaces).
+     *
+     * ClientBlob = Authorization data for the client, in an opaque format specific
+     * to the authorization method.
+     *
+     * The server reply format is: "250-ServiceID=" ServiceID CRLF
+     * ["250-PrivateKey=" KeyType ":" KeyBlob CRLF] ("250-ClientAuth=" ClientName
+     * ":" ClientBlob CRLF) "250 OK" CRLF
+     *
+     * ServiceID = The Onion Service address without the trailing ".onion" suffix
+     *
+     * @throws IOException
+     */
+    public TORHS createHiddenService(Integer port) throws IOException, NoSuchAlgorithmException {
+        return createHiddenService(port, -1, "NEW:BEST");
+    }
+
+    public TORHS createHiddenService(Integer virtPort, Integer targetPort) throws IOException, NoSuchAlgorithmException {
+        return createHiddenService(virtPort, targetPort, "NEW:BEST");
+    }
+
+    public TORHS createHiddenService(Integer port, String private_key) throws IOException, NoSuchAlgorithmException {
+        return createHiddenService(port, -1, private_key);
+    }
+
+    public TORHS createHiddenService(Integer virtPort, Integer targetPort, String privateKey) throws IOException, NoSuchAlgorithmException {
+
+        // assemble port string
+        String port = virtPort.toString();
+
+        if (targetPort > 0)
+            port += "," + targetPort;
+
+        /*
+         * we could try to decode the supplied key and somehow get its type, however, as
+         * Java does not want to read PKCS1-encoded PEM without local help, we let
+         * the Tor binary do the math.
+         */
+        List<ReplyLine> result = null;
+        for (String algorithm : TORAlgorithms.toArray())
+            try {
+                result = sendAndWaitForResponse("ADD_ONION " + getPemPrivateKey(privateKey, algorithm) + " Port=" + port + "\r\n", null);
+                break;
+            } catch (TORControlError e) {
+                if (e.getErrorType() != 513)
+                    throw e;
+            }
+
+        // in case result is still not properly filled, we do not know the correct
+        // key type. Maybe Tor has a new key type available?
+        if (null == result)
+            throw new IOException("We should not be here. Contact the developers!");
+        TORHS torhs = new TORHS();
+        torhs.virtualPort = virtPort;
+        torhs.targetPort = targetPort;
+        torhs.serviceId = result.get(0).msg.replace("ServiceID=", "");
+        String newPrivateKey = privateKey.contains("NEW") ? result.get(1).msg.replace("PrivateKey=", "") : privateKey;
+        if (newPrivateKey.startsWith("-----BEGIN")) { // we reused a key
+            torhs.privateKey = newPrivateKey;
+        } else {
+            String type = null;
+            if (newPrivateKey.startsWith(TORAlgorithms.RSA1024))
+                type = "RSA";
+            else if (newPrivateKey.startsWith(TORAlgorithms.ED25519V3))
+                type = "OPENSSH";
+            else
+                throw new NoSuchAlgorithmException(type);
+            newPrivateKey = "-----BEGIN " + type + " PRIVATE KEY-----\n"
+                    + newPrivateKey.substring(newPrivateKey.indexOf(":") + 1) + "\n-----END " + type
+                    + " PRIVATE KEY-----";
+            torhs.privateKey = newPrivateKey;
+            torhs.newKey = true;
+        }
+
+        /*
+         * by asking for the service we just created, TOR is going to acquire a suitable
+         * hidden service descriptor. When such a descriptor is not found in TORs local
+         * cache, TOR tries to publish the descriptor or at least the onion address. The
+         * nice thing about that is that a HSFETCH (i.e. what isHSAvailable does),
+         * triggers HS_DESC and HS_DESC_CONTENT events when TOR gets the information.
+         */
+        LOG.info(torhs.serviceId+" available: "+isHSAvailable(torhs.serviceId));
+
+        return torhs;
+    }
+
     private String getPemPrivateKey(String keyBytes, String algorithm) {
         // we do not need to construct anything in case Tor is about to generate a key
         if (keyBytes.startsWith("NEW"))

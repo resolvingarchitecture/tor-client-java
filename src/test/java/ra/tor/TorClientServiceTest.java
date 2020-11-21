@@ -42,43 +42,42 @@ public class TorClientServiceTest {
         service.gracefulShutdown();
     }
 
-    @Test
-    public void verifyInitializedTest() {
-        if(!ready) {
-            LOG.warning("Service not ready - ensure Tor is running.");
-        }
-        Assert.assertTrue(ready);
-    }
-
-    @Test
-    public void verifyConnected() {
-        Envelope envelope = Envelope.documentFactory();
-        try {
-            // Secure Drop Onion Site
-            envelope.setURL(new URL("http://sdolvtfhatvsysc6l34d65ymdwxcujausv7k5jk4cy5ttzhjoi6fzvyd.onion"));
-        } catch (MalformedURLException e) {
-            LOG.severe(e.getLocalizedMessage());
-            Assert.fail();
-            return;
-        }
-        envelope.setHeader(Envelope.HEADER_CONTENT_TYPE, "text/html");
-        envelope.setAction(Envelope.Action.GET);
-        service.sendOut(envelope);
-        String html = new String((byte[]) DLC.getContent(envelope));
-        LOG.info(html);
-        String secureDropHTML = "<title>\n" +
-                "\t\t\t\t\n" +
-                "\t\t\t\t\tShare and accept documents securely\n" +
-                "\t\t\t\t\n" +
-                "\t\t\t\t\n" +
-                "\t\t\t\t\t- SecureDrop\n" +
-                "\t\t\t\t\n" +
-                "\t\t\t</title>";
-        if(!html.contains(secureDropHTML)) {
-            LOG.warning("Verify Secure Drop onion site is accessible at: http://sdolvtfhatvsysc6l34d65ymdwxcujausv7k5jk4cy5ttzhjoi6fzvyd.onion");
-        }
-        Assert.assertTrue(html.contains(secureDropHTML));
-//        Assert.assertTrue(html.contains("{op=200}"));
-    }
+//    @Test
+//    public void verifyInitializedTest() {
+//        if(!ready) {
+//            LOG.warning("Service not ready - ensure Tor is running.");
+//        }
+//        Assert.assertTrue(ready);
+//    }
+//
+//    @Test
+//    public void verifyConnected() {
+//        Envelope envelope = Envelope.documentFactory();
+//        try {
+//            // Secure Drop Onion Site
+//            envelope.setURL(new URL("http://sdolvtfhatvsysc6l34d65ymdwxcujausv7k5jk4cy5ttzhjoi6fzvyd.onion"));
+//        } catch (MalformedURLException e) {
+//            LOG.severe(e.getLocalizedMessage());
+//            Assert.fail();
+//            return;
+//        }
+//        envelope.setHeader(Envelope.HEADER_CONTENT_TYPE, "text/html");
+//        envelope.setAction(Envelope.Action.GET);
+//        service.sendOut(envelope);
+//        String html = new String((byte[]) DLC.getContent(envelope));
+//        LOG.info(html);
+//        String secureDropHTML = "<title>\n" +
+//                "\t\t\t\t\n" +
+//                "\t\t\t\t\tShare and accept documents securely\n" +
+//                "\t\t\t\t\n" +
+//                "\t\t\t\t\n" +
+//                "\t\t\t\t\t- SecureDrop\n" +
+//                "\t\t\t\t\n" +
+//                "\t\t\t</title>";
+//        if(!html.contains(secureDropHTML)) {
+//            LOG.warning("Verify Secure Drop onion site is accessible at: http://sdolvtfhatvsysc6l34d65ymdwxcujausv7k5jk4cy5ttzhjoi6fzvyd.onion");
+//        }
+//        Assert.assertTrue(html.contains(secureDropHTML));
+//    }
 
 }
