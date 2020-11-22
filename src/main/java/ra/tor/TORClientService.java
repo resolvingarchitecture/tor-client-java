@@ -90,8 +90,10 @@ public final class TORClientService extends HTTPService {
 
         proxy = new Proxy(Proxy.Type.SOCKS, new InetSocketAddress(HOST, PORT_SOCKS));
 
+        LOG.info("Starting underlying HTTP Service...");
         super.start(config);
 
+        LOG.info("Initializing TOR Hidden Service...");
         torUserHome = new File(SystemSettings.getUserHomeDir(), ".tor");
         if(!torUserHome.exists()) {
             LOG.severe("TOR User Home does not exist => TOR not installed.");
@@ -167,7 +169,7 @@ public final class TORClientService extends HTTPService {
                 }
             }
         }
-        LOG.info("Starting TOR Client Service...");
+        LOG.info("Starting TOR Hidden Service...");
         updateStatus(ServiceStatus.STARTING);
         try {
             controlConnection = getControlConnection();
