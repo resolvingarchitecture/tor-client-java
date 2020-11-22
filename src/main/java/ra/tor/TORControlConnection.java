@@ -853,19 +853,19 @@ public class TORControlConnection implements TORControlCommands {
      *
      * @throws IOException
      */
-    public TORHS createHiddenService(Integer port) throws IOException, NoSuchAlgorithmException {
+    public TORHiddenService createHiddenService(Integer port) throws IOException, NoSuchAlgorithmException {
         return createHiddenService(port, -1, "NEW:BEST");
     }
 
-    public TORHS createHiddenService(Integer virtPort, Integer targetPort) throws IOException, NoSuchAlgorithmException {
+    public TORHiddenService createHiddenService(Integer virtPort, Integer targetPort) throws IOException, NoSuchAlgorithmException {
         return createHiddenService(virtPort, targetPort, "NEW:BEST");
     }
 
-    public TORHS createHiddenService(Integer port, String private_key) throws IOException, NoSuchAlgorithmException {
+    public TORHiddenService createHiddenService(Integer port, String private_key) throws IOException, NoSuchAlgorithmException {
         return createHiddenService(port, -1, private_key);
     }
 
-    public TORHS createHiddenService(Integer virtPort, Integer targetPort, String privateKey) throws IOException, NoSuchAlgorithmException {
+    public TORHiddenService createHiddenService(Integer virtPort, Integer targetPort, String privateKey) throws IOException, NoSuchAlgorithmException {
 
         // assemble port string
         String port = virtPort.toString();
@@ -892,13 +892,13 @@ public class TORControlConnection implements TORControlCommands {
         // key type. Maybe Tor has a new key type available?
         if (null == result)
             throw new IOException("We should not be here. Contact the developers!");
-        TORHS torhs = new TORHS();
-        torhs.virtualPort = virtPort;
-        torhs.targetPort = targetPort;
-        torhs.serviceId = result.get(0).msg.replace("ServiceID=", "");
+        TORHiddenService TORHiddenService = new TORHiddenService();
+        TORHiddenService.virtualPort = virtPort;
+        TORHiddenService.targetPort = targetPort;
+        TORHiddenService.serviceId = result.get(0).msg.replace("ServiceID=", "");
         String newPrivateKey = privateKey.contains("NEW") ? result.get(1).msg.replace("PrivateKey=", "") : privateKey;
         if (newPrivateKey.startsWith("-----BEGIN")) { // we reused a key
-            torhs.privateKey = newPrivateKey;
+            TORHiddenService.privateKey = newPrivateKey;
         } else {
             String type = null;
             if (newPrivateKey.startsWith(TORAlgorithms.RSA1024))
@@ -910,8 +910,8 @@ public class TORControlConnection implements TORControlCommands {
             newPrivateKey = "-----BEGIN " + type + " PRIVATE KEY-----\n"
                     + newPrivateKey.substring(newPrivateKey.indexOf(":") + 1) + "\n-----END " + type
                     + " PRIVATE KEY-----";
-            torhs.privateKey = newPrivateKey;
-            torhs.newKey = true;
+            TORHiddenService.privateKey = newPrivateKey;
+            TORHiddenService.newKey = true;
         }
 
         /*
@@ -921,9 +921,9 @@ public class TORControlConnection implements TORControlCommands {
          * nice thing about that is that a HSFETCH (i.e. what isHSAvailable does),
          * triggers HS_DESC and HS_DESC_CONTENT events when TOR gets the information.
          */
-        LOG.info(torhs.serviceId+" available: "+isHSAvailable(torhs.serviceId));
+        LOG.info(TORHiddenService.serviceId+" available: "+isHSAvailable(TORHiddenService.serviceId));
 
-        return torhs;
+        return TORHiddenService;
     }
 
     private String getPemPrivateKey(String keyBytes, String algorithm) {

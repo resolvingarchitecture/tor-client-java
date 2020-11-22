@@ -5,11 +5,11 @@ import java.util.logging.Logger;
 
 public class TOREventHandler implements EventHandler {
 
-    private final TORHS torhs;
+    private final TORHiddenService TORHiddenService;
     private final Logger out;
 
-    public TOREventHandler(TORHS torhs, Logger LOG) {
-        this.torhs = torhs;
+    public TOREventHandler(TORHiddenService TORHiddenService, Logger LOG) {
+        this.TORHiddenService = TORHiddenService;
         out = LOG;
     }
 

@@ -4,14 +4,14 @@ import ra.common.content.JSON;
 
 import java.util.Map;
 
-public class TORHS extends JSON {
+public class TORHiddenService extends JSON {
     Integer virtualPort;
     Integer targetPort;
     String serviceId;
     volatile String privateKey;
     volatile Boolean newKey = false;
 
-    public TORHS() {}
+    public TORHiddenService() {}
 
     @Override
     public Map<String, Object> toMap() {

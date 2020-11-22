@@ -1,13 +1,12 @@
 package ra.tor;
 
-import ra.common.Envelope;
 import ra.common.messaging.MessageProducer;
 import ra.common.network.*;
 import ra.common.service.ServiceStatus;
 import ra.common.service.ServiceStatusObserver;
 
-import ra.http.client.EnvelopeJSONDataHandler;
-import ra.http.client.HTTPClientService;
+import ra.http.EnvelopeJSONDataHandler;
+import ra.http.HTTPService;
 import ra.util.Config;
 import ra.util.FileUtil;
 import ra.util.RandomUtil;
@@ -25,7 +24,7 @@ import java.util.logging.Logger;
 /**
  * Sets up an HttpClientSensor with the local Tor instance as a proxy (127.0.0.1:9150).
  */
-public final class TORClientService extends HTTPClientService {
+public final class TORClientService extends HTTPService {
 
     private static final Logger LOG = Logger.getLogger(TORClientService.class.getName());
 
@@ -39,26 +38,24 @@ public final class TORClientService extends HTTPClientService {
     private Process tor;
     private final Map<String, NetworkClientSession> sessions = new HashMap<>();
     private Thread taskRunnerThread;
-    private Properties config;
 
     private TORControlConnection controlConnection;
-    private TORHS torhs = null;
+    private TORHiddenService torHiddenService = null;
 
     private File torUserHome;
     private File torConfigHome;
     private File torrcFile;
     private File privKeyFile;
     private File hiddenServiceDir;
-
-    private File torhsFile;
+    private File hiddenServiceFile;
 
 
     public TORClientService(MessageProducer producer, ServiceStatusObserver observer) {
         super(Network.Tor, producer, observer);
     }
 
-    TORHS getTorhs() {
-        return torhs;
+    TORHiddenService getTorHiddenService() {
+        return torHiddenService;
     }
 
     public int randomTORPort() {
@@ -72,22 +69,28 @@ public final class TORClientService extends HTTPClientService {
         return conn;
     }
 
+    public String getHiddenServiceId() {
+        return torHiddenService.serviceId;
+    }
+
+    public String getHiddenServiceURL() {
+        return "http://"+torHiddenService.serviceId+".onion";
+    }
+
     @Override
     public boolean start(Properties properties) {
-        LOG.info("Starting TOR Sensor...");
+        LOG.info("Initializing TOR Client Service...");
         updateStatus(ServiceStatus.INITIALIZING);
         try {
-            this.config = Config.loadFromClasspath("ra-tor-client.config", properties, false);
+            config = Config.loadAll(properties,"ra-tor-client.config");
         } catch (Exception e) {
-            LOG.warning(e.getLocalizedMessage());
-            config = properties;
+            LOG.severe(e.getLocalizedMessage());
+            return false;
         }
 
         proxy = new Proxy(Proxy.Type.SOCKS, new InetSocketAddress(HOST, PORT_SOCKS));
 
-        super.start(properties);
-
-        torhs = new TORHS();
+        super.start(config);
 
         torUserHome = new File(SystemSettings.getUserHomeDir(), ".tor");
         if(!torUserHome.exists()) {
@@ -119,23 +122,28 @@ public final class TORClientService extends HTTPClientService {
 
         privKeyFile = new File(hiddenServiceDir, "private_key");
 
-        torhsFile = new File(getServiceDirectory(), "torhs");
-        if(torhsFile.exists()) {
+        torHiddenService = new TORHiddenService();
+
+        hiddenServiceFile = new File(getServiceDirectory(), "torhs");
+        if(hiddenServiceFile.exists()) {
             try {
-                String json = new String(FileUtil.readFile(torhsFile.getAbsolutePath()));
-                torhs.fromJSON(json);
+                String json = new String(FileUtil.readFile(hiddenServiceFile.getAbsolutePath()));
+                torHiddenService.fromJSON(json);
             } catch (IOException e) {
                 LOG.severe(e.getLocalizedMessage());
                 return false;
             }
         }
 
-        boolean destroyHiddenService = "true".equals(config.getProperty("ra.tor.privkey.destroy"));
+        boolean destroyHiddenService = "true".equals(config.getProperty("ra.tor.hs.privkey.destroy"));
         if(destroyHiddenService && privKeyFile.exists()) {
             LOG.info("Destroying Hidden Service....");
-            privKeyFile.delete();
+            if(!privKeyFile.delete()) {
+                LOG.severe("Requested to destroy hidden service private key and unable to. Delete manually and restart. Stopping startup.");
+                return false;
+            }
         } else if(privKeyFile.exists()) {
-            LOG.info("Tor Hidden Service key found, loading...");
+            LOG.info("Tor Hidden Service private key found, loading...");
             byte[] bytes = null;
             try {
                 bytes = FileUtil.readFile(privKeyFile.getAbsolutePath());
@@ -145,14 +153,21 @@ public final class TORClientService extends HTTPClientService {
                 privKeyFile.delete();
             }
             if(bytes!=null) {
-                torhs.privateKey = new String(bytes);
+                torHiddenService.privateKey = new String(bytes);
             }
-            if(torhs.virtualPort==null || torhs.targetPort==null || torhs.serviceId==null || torhs.privateKey==null) {
+            if(torHiddenService.virtualPort==null
+                    || torHiddenService.targetPort==null
+                    || torHiddenService.serviceId==null
+                    || torHiddenService.privateKey==null) {
                 // Probably corrupted file
                 LOG.info("Tor key found but likely corrupted, deleting....");
-                privKeyFile.delete();
+                if(!privKeyFile.delete()) {
+                    LOG.severe("Unable to delete likely corrupted hidden service private key. Delete manually and restart. Stopping service start.");
+                    return false;
+                }
             }
         }
+        LOG.info("Starting TOR Client Service...");
         updateStatus(ServiceStatus.STARTING);
         try {
             controlConnection = getControlConnection();
@@ -165,29 +180,36 @@ public final class TORClientService extends HTTPClientService {
                 sb.append("\n\t"+e.getKey()+"="+e.getValue());
             }
             LOG.info(sb.toString());
-            controlConnection.setEventHandler(new TOREventHandler(torhs, LOG));
+            controlConnection.setEventHandler(new TOREventHandler(torHiddenService, LOG));
             controlConnection.setEvents(Arrays.asList("CIRC", "ORCONN", "INFO", "NOTICE", "WARN", "ERR", "HS_DESC", "HS_DESC_CONTENT"));
 
-            if(torhs.serviceId==null) {
-                // Private key file doesn't exist, was unreadable, or requested to be destroyed so create a new hidden service
+            String handlerClass = config.getProperty("ra.tor.hs.handler");
+            if(handlerClass==null) {
+                handlerClass = EnvelopeJSONDataHandler.class.getName();
+            }
+
+
+            if(torHiddenService.serviceId==null) {
+                LOG.info("TOR Hidden Service private key does not exist, was unreadable, or requested to be destroyed, so creating new hidden service...");
                 privKeyFile = new File(hiddenServiceDir, "private_key");
                 int virtPort;
                 if(config.getProperty("ra.tor.virtualPort")==null) {
                     virtPort = randomTORPort();
                 } else {
-                    virtPort = Integer.parseInt(config.getProperty("ra.tor.virtualPort"));
+                    virtPort = Integer.parseInt(config.getProperty("ra.tor.hs.virtualPort"));
                 }
                 int targetPort;
                 if(config.getProperty("ra.tor.targetPort")==null) {
                     targetPort = randomTORPort();
                 } else {
-                    targetPort = Integer.parseInt(config.getProperty("ra.tor.targetPort"));
+                    targetPort = Integer.parseInt(config.getProperty("ra.tor.hs.targetPort"));
                 }
-                if(launch("TORHS, API, localhost, " + targetPort + ", " + EnvelopeJSONDataHandler.class.getName())) {
-                    torhs = controlConnection.createHiddenService(virtPort, targetPort);
-                    LOG.info("TOR Hidden Service Created: " + torhs.serviceId
-                            + " on virtualPort: " + torhs.virtualPort
-                            + " to targetPort: " + torhs.targetPort);
+
+                if(launch("TORHS, API, localhost, " + targetPort + ", " + handlerClass)) {
+                    torHiddenService = controlConnection.createHiddenService(virtPort, targetPort);
+                    LOG.info("TOR Hidden Service Created: " + torHiddenService.serviceId
+                            + " on virtualPort: " + torHiddenService.virtualPort
+                            + " to targetPort: " + torHiddenService.targetPort);
 //                controlConnection.destroyHiddenService(hiddenService.serviceID);
 //                hiddenService = controlConnection.createHiddenService(hiddenService.port, hiddenService.privateKey);
 //                LOG.info("TOR Hidden Service Created: " + hiddenService.serviceID + " on port: "+hiddenService.port);
@@ -196,10 +218,10 @@ public final class TORClientService extends HTTPClientService {
                         LOG.warning("Unable to create file: " + privKeyFile.getAbsolutePath());
                         return false;
                     }
-                    torhs.readable(true);
-                    torhs.setCreatedAt(new Date().getTime());
-                    FileUtil.writeFile(torhs.privateKey.getBytes(), privKeyFile.getAbsolutePath());
-                    FileUtil.writeFile(torhs.toJSON().getBytes(), torhsFile.getAbsolutePath());
+                    torHiddenService.readable(true);
+                    torHiddenService.setCreatedAt(new Date().getTime());
+                    FileUtil.writeFile(torHiddenService.privateKey.getBytes(), privKeyFile.getAbsolutePath());
+                    FileUtil.writeFile(torHiddenService.toJSON().getBytes(), hiddenServiceFile.getAbsolutePath());
 
                     // Make sure torrc file is up to date
 //                    List<String> torrcLines = FileUtil.readLines(torhsFile);
@@ -233,17 +255,17 @@ public final class TORClientService extends HTTPClientService {
                     updateStatus(ServiceStatus.ERROR);
                     return  false;
                 }
-            } else if(launch("TORHS, API, localhost, " + torhs.targetPort + ", " + EnvelopeJSONDataHandler.class.getName())) {
-                if(controlConnection.isHSAvailable(torhs.serviceId)) {
-                    LOG.info("TOR Hidden Service available: "+torhs.serviceId
-                            + " on virtualPort: "+torhs.virtualPort
-                            + " to targetPort: "+torhs.targetPort);
+            } else if(launch("TORHS, API, localhost, " + torHiddenService.targetPort + ", " + handlerClass)) {
+                if(controlConnection.isHSAvailable(torHiddenService.serviceId)) {
+                    LOG.info("TOR Hidden Service available: "+ torHiddenService.serviceId
+                            + " on virtualPort: "+ torHiddenService.virtualPort
+                            + " to targetPort: "+ torHiddenService.targetPort);
                 } else {
-                    LOG.info("TOR Hidden Service not available; creating: "+torhs.serviceId);
-                    torhs = controlConnection.createHiddenService(torhs.virtualPort, torhs.targetPort, torhs.privateKey);
-                    LOG.info("TOR Hidden Service created: " + torhs.serviceId
-                            + " on virtualPort: " + torhs.virtualPort
-                            + " to targetPort: " + torhs.targetPort);
+                    LOG.info("TOR Hidden Service not available; creating: "+ torHiddenService.serviceId);
+                    torHiddenService = controlConnection.createHiddenService(torHiddenService.virtualPort, torHiddenService.targetPort, torHiddenService.privateKey);
+                    LOG.info("TOR Hidden Service created: " + torHiddenService.serviceId
+                            + " on virtualPort: " + torHiddenService.virtualPort
+                            + " to targetPort: " + torHiddenService.targetPort);
                 }
             } else {
                 LOG.severe("Unable to launch TOR hidden service.");
@@ -271,13 +293,17 @@ public final class TORClientService extends HTTPClientService {
     }
 
     private void kickOffDiscovery() {
-        // Setup Discovery
-//        discovery = new NetworkPeerDiscovery(taskRunner, this);
+        // Start Discovery
+//        discovery = new TORNetworkPeerDiscovery(taskRunner, this);
 //        taskRunner.addTask(discovery);
 //        taskRunnerThread = new Thread(taskRunner);
 //        taskRunnerThread.setDaemon(true);
-//        taskRunnerThread.setName("TORSensor-TaskRunnerThread");
+//        taskRunnerThread.setName(TORNetworkPeerDiscovery.class.getSimpleName());
 //        taskRunnerThread.start();
+    }
+
+    private void stopDiscovery() {
+
     }
 
     @Override
