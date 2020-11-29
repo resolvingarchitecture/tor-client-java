@@ -1,5 +1,5 @@
 # Tor Client Service
-A client for accessing local
+A client for accessing local Tor daemon.
 
 ## Tor Local
 Client running with a local Tor instance requires installing Tor as a daemon.
