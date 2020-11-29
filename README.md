@@ -1,13 +1,10 @@
-# 1M5 TOR Sensor
-TOR Sensor
+# Tor Client Service
+A client for accessing local
 
-## Tor Embedded
-To come...
-
-## Tor External
-TOR Sensor running with an external TOR instance requires installing TOR as a daemon.
-This is accomplished by the 1M5 TOR Sensor by using the local Tor's SOCKSv5 proxy address and port.
-Install and configure TOR daemon:
+## Tor Local
+Client running with a local Tor instance requires installing Tor as a daemon.
+This is accomplished by this client using the local Tor's control port and SOCKSv5 proxy address and port.
+Install and configure Tor daemon:
 
 1. update distro (ubuntu: sudo apt-get update, alpine: apk update)
 2. upgrade distro (ubuntu: sudo apt-get upgrade, alpine: apk upgrade)
@@ -18,3 +15,9 @@ Install and configure TOR daemon:
 7. in /etc/tor/torrc replace: CookieAuthentication 1 with CookieAuthentication 0
 8. register tor as a service (alpine: rc-update add tor)
 9. start tor service (alpine: rc-service tor start)
+
+## Tor Embedded
+Not supported as ability to keep updated not possible.
+
+## Tor External
+Not supported as it breaks privacy.
