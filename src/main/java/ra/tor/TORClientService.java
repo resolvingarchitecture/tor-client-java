@@ -49,6 +49,10 @@ public final class TORClientService extends HTTPService {
     private File hiddenServiceDir;
     private File hiddenServiceFile;
 
+    public TORClientService() {
+        super();
+        getNetworkState().network = Network.Tor;
+    }
 
     public TORClientService(MessageProducer producer, ServiceStatusObserver observer) {
         super(Network.Tor, producer, observer);
