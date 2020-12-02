@@ -17,7 +17,6 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<java.version>1.11</java.version>
-        <ra.version>1.0.0</ra.version>
 	</properties>
 
 	<scm>
@@ -38,13 +37,13 @@
 		<dependency>
 			<groupId>resolvingarchitecture</groupId>
 			<artifactId>common</artifactId>
-			<version>${ra.version}</version>
+			<version>1.0.0</version>
 		</dependency>
 
         <dependency>
             <groupId>resolvingarchitecture</groupId>
             <artifactId>http-client</artifactId>
-            <version>${ra.version}</version>
+            <version>1.0.0</version>
         </dependency>
 
 		<!-- Test -->
