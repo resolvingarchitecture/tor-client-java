@@ -176,6 +176,7 @@ public final class TORClientService extends HTTPService {
         LOG.info("Starting TOR Hidden Service...");
         updateStatus(ServiceStatus.STARTING);
         try {
+            updateNetworkStatus(NetworkStatus.CONNECTING);
             controlConnection = getControlConnection();
             Map<String, String> m = controlConnection.getInfo(Arrays.asList("stream-status", "orconn-status", "circuit-status", "version"));
 //            Map<String, String> m = controlConnection.getInfo(Arrays.asList("version"));
@@ -194,7 +195,6 @@ public final class TORClientService extends HTTPService {
                 handlerClass = EnvelopeJSONDataHandler.class.getName();
             }
 
-
             if(torHiddenService.serviceId==null) {
                 LOG.info("TOR Hidden Service private key does not exist, was unreadable, or requested to be destroyed, so creating new hidden service...");
                 privKeyFile = new File(hiddenServiceDir, "private_key");
@@ -210,7 +210,6 @@ public final class TORClientService extends HTTPService {
                 } else {
                     targetPort = Integer.parseInt(config.getProperty("ra.tor.hs.targetPort"));
                 }
-
                 if(launch("TORHS, API, localhost, " + targetPort + ", " + handlerClass)) {
                     torHiddenService = controlConnection.createHiddenService(virtPort, targetPort);
                     LOG.info("TOR Hidden Service Created: " + torHiddenService.serviceId
@@ -259,7 +258,8 @@ public final class TORClientService extends HTTPService {
                 } else {
                     LOG.severe("Unable to create new TOR hidden service.");
                     updateStatus(ServiceStatus.ERROR);
-                    return  false;
+                    updateNetworkStatus(NetworkStatus.ERROR);
+                    return false;
                 }
             } else if(launch("TORHS, API, localhost, " + torHiddenService.targetPort + ", " + handlerClass)) {
                 if(controlConnection.isHSAvailable(torHiddenService.serviceId)) {
@@ -276,6 +276,7 @@ public final class TORClientService extends HTTPService {
             } else {
                 LOG.severe("Unable to launch TOR hidden service.");
                 updateStatus(ServiceStatus.ERROR);
+                updateNetworkStatus(NetworkStatus.ERROR);
                 return false;
             }
         } catch (IOException e) {
@@ -286,14 +287,17 @@ public final class TORClientService extends HTTPService {
                 LOG.warning(e.getLocalizedMessage());
             }
             updateStatus(ServiceStatus.ERROR);
+            updateNetworkStatus(NetworkStatus.ERROR);
             return false;
         } catch (NoSuchAlgorithmException e) {
             LOG.warning("TORAlgorithm not supported: "+e.getLocalizedMessage());
             updateStatus(ServiceStatus.ERROR);
+            updateNetworkStatus(NetworkStatus.ERROR);
             return false;
         }
 
         updateStatus(ServiceStatus.RUNNING);
+        updateNetworkStatus(NetworkStatus.CONNECTED);
 //        kickOffDiscovery();
         return true;
     }
