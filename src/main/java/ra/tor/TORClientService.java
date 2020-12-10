@@ -215,6 +215,9 @@ public final class TORClientService extends HTTPService {
                     LOG.info("TOR Hidden Service Created: " + torHiddenService.serviceId
                             + " on virtualPort: " + torHiddenService.virtualPort
                             + " to targetPort: " + torHiddenService.targetPort);
+                    getNetworkState().localPeer.getDid().getPublicKey().setAddress(torHiddenService.serviceId);
+                    getNetworkState().targetPort = torHiddenService.targetPort;
+                    getNetworkState().virtualPort = torHiddenService.virtualPort;
 //                controlConnection.destroyHiddenService(hiddenService.serviceID);
 //                hiddenService = controlConnection.createHiddenService(hiddenService.port, hiddenService.privateKey);
 //                LOG.info("TOR Hidden Service Created: " + hiddenService.serviceID + " on port: "+hiddenService.port);
@@ -273,6 +276,9 @@ public final class TORClientService extends HTTPService {
                             + " on virtualPort: " + torHiddenService.virtualPort
                             + " to targetPort: " + torHiddenService.targetPort);
                 }
+                getNetworkState().localPeer.getDid().getPublicKey().setAddress(torHiddenService.serviceId);
+                getNetworkState().targetPort = torHiddenService.targetPort;
+                getNetworkState().virtualPort = torHiddenService.virtualPort;
             } else {
                 LOG.severe("Unable to launch TOR hidden service.");
                 updateStatus(ServiceStatus.ERROR);
