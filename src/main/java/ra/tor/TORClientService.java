@@ -52,6 +52,7 @@ public final class TORClientService extends HTTPService {
     public TORClientService() {
         super();
         getNetworkState().network = Network.Tor;
+        getNetworkState().localPeer = new NetworkPeer(Network.Tor);
     }
 
     public TORClientService(MessageProducer producer, ServiceStatusObserver observer) {
