@@ -85,7 +85,7 @@ public final class TORClientService extends HTTPService {
     @Override
     public boolean start(Properties properties) {
         LOG.info("Initializing TOR Client Service...");
-        updateStatus(ServiceStatus.INITIALIZING);
+        updateStatus(ServiceStatus.STARTING);
         try {
             config = Config.loadAll(properties,"ra-tor-client.config");
         } catch (Exception e) {
@@ -175,7 +175,6 @@ public final class TORClientService extends HTTPService {
             }
         }
         LOG.info("Starting TOR Hidden Service...");
-        updateStatus(ServiceStatus.STARTING);
         try {
             updateNetworkStatus(NetworkStatus.CONNECTING);
             controlConnection = getControlConnection();
@@ -195,7 +194,7 @@ public final class TORClientService extends HTTPService {
             if(handlerClass==null) {
                 handlerClass = EnvelopeJSONDataHandler.class.getName();
             }
-
+            updateNetworkStatus(NetworkStatus.CONNECTED);
             if(torHiddenService.serviceId==null) {
                 LOG.info("TOR Hidden Service private key does not exist, was unreadable, or requested to be destroyed, so creating new hidden service...");
                 privKeyFile = new File(hiddenServiceDir, "private_key");
@@ -302,9 +301,7 @@ public final class TORClientService extends HTTPService {
             updateNetworkStatus(NetworkStatus.ERROR);
             return false;
         }
-
         updateStatus(ServiceStatus.RUNNING);
-        updateNetworkStatus(NetworkStatus.CONNECTED);
 //        kickOffDiscovery();
         return true;
     }
