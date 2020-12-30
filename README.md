@@ -13,8 +13,9 @@ Install and configure Tor daemon:
 5. in /etc/tor/torrc uncomment line: ControlPort 9051
 6. in /etc/tor/torrc uncomment line: CookieAuthentication 1
 7. in /etc/tor/torrc replace: CookieAuthentication 1 with CookieAuthentication 0
-8. register tor as a service (alpine: rc-update add tor)
-9. start tor service (alpine: rc-service tor start)
+8. register tor as a service (ubuntu: sudo systemctl enable tor, alpine: rc-update add tor)
+9. start tor service (ubuntu: sudo systemctl start tor, alpine: rc-service tor start)
+10. verify tor service running (ubuntu: sudo systemctl status tor.service)
 
 ## Tor Embedded
 Not supported as ability to keep updated not possible.
