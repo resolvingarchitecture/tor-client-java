@@ -42,7 +42,6 @@ public class TorClientServiceTest {
     }
 
 //    @Test
-//    @Order(1)
 //    public void verifyInitializedTest() {
 //        if(!ready) {
 //            LOG.warning("Service not ready - ensure Tor is running.");
@@ -51,7 +50,6 @@ public class TorClientServiceTest {
 //    }
 
     @Test
-    @Order(2)
     public void verifyClientWithOnion() {
         Envelope envelope = Envelope.documentFactory();
         try {
@@ -75,11 +73,9 @@ public class TorClientServiceTest {
     }
 
     @Test
-    @Order(3)
     public void verifyClientWithHTTPS() {
         Envelope envelope = Envelope.documentFactory();
         try {
-            // Bitcoin Memmpool Site
             envelope.setURL(new URL("https://mempool.space/api/v1/fees/recommended"));
         } catch (MalformedURLException e) {
             LOG.severe(e.getLocalizedMessage());
@@ -99,7 +95,40 @@ public class TorClientServiceTest {
     }
 
 //    @Test
-//    @Order(4)
+//    public void verifyClientWithHTTPSPoloniex() {
+//        Envelope envelope = Envelope.documentFactory();
+//        try {
+//            envelope.setURL(new URL("https://poloniex.com/public?command=returnTicker"));
+//        } catch (MalformedURLException e) {
+//            LOG.severe(e.getLocalizedMessage());
+//            fail();
+//            return;
+//        }
+//        envelope.setHeader(Envelope.HEADER_CONTENT_TYPE, Envelope.HEADER_CONTENT_TYPE_JSON);
+//        envelope.setAction(Envelope.Action.GET);
+//        service.sendOut(envelope);
+//        String res = new String((byte[]) envelope.getContent());
+//        LOG.info(res);
+//    }
+
+//    @Test
+//    public void verifyClientWithHTTPSCoinGecko() {
+//        Envelope envelope = Envelope.documentFactory();
+//        try {
+//            envelope.setURL(new URL("https://api.coingecko.com/api/v3/exchange_rates"));
+//        } catch (MalformedURLException e) {
+//            LOG.severe(e.getLocalizedMessage());
+//            fail();
+//            return;
+//        }
+//        envelope.setHeader(Envelope.HEADER_CONTENT_TYPE, Envelope.HEADER_CONTENT_TYPE_JSON);
+//        envelope.setAction(Envelope.Action.GET);
+//        service.sendOut(envelope);
+//        String res = new String((byte[]) envelope.getContent());
+//        LOG.info(res);
+//    }
+//
+//    @Test
 //    public void verifyClientWithOnionJSON() {
 //        Envelope envelope = Envelope.documentFactory();
 //        try {
@@ -121,7 +150,6 @@ public class TorClientServiceTest {
 //        assertTrue(res.contains(msg));
 //    }
 //    @Test
-//    @Order(5)
 //    public void verifyHiddenService() {
 //        Envelope envelope = Envelope.documentFactory();
 //        try {

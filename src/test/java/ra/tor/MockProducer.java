@@ -12,19 +12,19 @@ public class MockProducer implements MessageProducer {
 
     @Override
     public boolean send(Envelope envelope) {
-        LOG.info(envelope.toJSON());
+        LOG.fine(envelope.toJSON());
         return true;
     }
 
     @Override
     public boolean send(Envelope envelope, Client client) {
-        LOG.info(envelope.toJSON());
+        LOG.fine(envelope.toJSON());
         return true;
     }
 
     @Override
     public boolean deadLetter(Envelope envelope) {
-        LOG.info(envelope.toJSON());
+        LOG.warning(envelope.toJSON());
         return true;
     }
 }
