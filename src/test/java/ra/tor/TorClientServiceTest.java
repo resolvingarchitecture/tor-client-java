@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import ra.common.DLC;
 import ra.common.Envelope;
-import ra.util.Wait;
+import ra.common.Wait;
 
 import java.net.MalformedURLException;
 import java.net.URL;
