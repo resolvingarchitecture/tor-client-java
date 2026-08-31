@@ -59,6 +59,13 @@ public final class TORClientService extends HTTPService {
         super(Network.Tor, producer, observer);
     }
 
+    private final LocalTorDetector localTorDetector = new LocalTorDetector();
+
+    /** The network this service carries traffic over. */
+    public Network getNetwork() {
+        return Network.Tor;
+    }
+
     TORHiddenService getTorHiddenService() {
         return torHiddenService;
     }
@@ -94,6 +101,17 @@ public final class TORClientService extends HTTPService {
         }
 
         proxy = new Proxy(Proxy.Type.SOCKS, new InetSocketAddress(HOST, PORT_SOCKS));
+
+        // Fail fast with a clear message if no local Tor daemon is reachable.
+        if(!localTorDetector.isLocalTorRunning()) {
+            LOG.severe("No local Tor daemon on " + HOST + " (SOCKS " + PORT_SOCKS
+                    + " reachable=" + localTorDetector.isSocksReachable()
+                    + ", control " + PORT_CONTROL + " reachable=" + localTorDetector.isControlReachable()
+                    + "). Install and run Tor with 'ControlPort 9051' and 'CookieAuthentication 0' - see README.md.");
+            updateNetworkStatus(NetworkStatus.DISCONNECTED);
+            updateStatus(ServiceStatus.UNAVAILABLE);
+            return false;
+        }
 
         LOG.info("Starting underlying HTTP Service...");
         super.start(config);

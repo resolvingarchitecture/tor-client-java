@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
 import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import ra.common.DLC;
 import ra.common.Envelope;
@@ -50,6 +51,7 @@ public class TorClientServiceTest {
 //    }
 
     @Test
+    @Disabled("live - requires a running local Tor daemon and a reachable onion service")
     public void verifyClientWithOnion() {
         Envelope envelope = Envelope.documentFactory();
         try {
@@ -73,6 +75,7 @@ public class TorClientServiceTest {
     }
 
     @Test
+    @Disabled("live - requires a running local Tor daemon and network access")
     public void verifyClientWithHTTPS() {
         Envelope envelope = Envelope.documentFactory();
         try {

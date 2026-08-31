@@ -22,3 +22,15 @@ Not supported as ability to keep updated not possible.
 
 ## Tor External
 Not supported as it breaks privacy.
+
+## Version Notes
+
+### 1.2.1
+- `LocalTorDetector` (probes SOCKS 9050 + control 9051); `start()` now fails fast
+  with an actionable message when no local Tor daemon is reachable, instead of a
+  confusing control-connection error.
+- `getNetwork()` convenience; used as the Tor protocol service by `1m5-core-java`
+  (`network.onemfive.core.protocol.TorProtocolService`).
+- Modern `maven-surefire-plugin` so the JUnit 5 tests actually run; the two live
+  network tests are `@Disabled`.
+- Added `DESIGN.md`, `TODO.md`.
