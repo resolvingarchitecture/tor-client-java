@@ -34,10 +34,14 @@ public final class TORClientService extends HTTPService {
     //    public static final Integer PORT_CONTROL = 9100;
     public static final Integer PORT_SOCKS_BROWSER = 9150;
     public static final Integer PORT_HIDDEN_SERVICE = 9151;
+    /** {@link TorSocksRelay}'s own listening port - every consumer of this service's Tor
+     *  connectivity connects here, never to {@link #PORT_SOCKS} directly. */
+    public static final Integer PORT_SOCKS_RELAY = 9052;
 
     private Process tor;
     private final Map<String, NetworkClientSession> sessions = new HashMap<>();
     private Thread taskRunnerThread;
+    private volatile TorSocksRelay socksRelay;
 
     private TORControlConnection controlConnection;
     private TORHiddenService torHiddenService = null;
@@ -319,9 +323,24 @@ public final class TORClientService extends HTTPService {
             updateNetworkStatus(NetworkStatus.ERROR);
             return false;
         }
+        try {
+            socksRelay = new TorSocksRelay(PORT_SOCKS_RELAY);
+            socksRelay.start();
+        } catch (IOException e) {
+            LOG.severe("could not start TorSocksRelay on port " + PORT_SOCKS_RELAY + ": " + e.getMessage());
+            updateStatus(ServiceStatus.ERROR);
+            updateNetworkStatus(NetworkStatus.ERROR);
+            return false;
+        }
+
         updateStatus(ServiceStatus.RUNNING);
 //        kickOffDiscovery();
         return true;
+    }
+
+    /** The local SOCKS relay every consumer of this Tor connection should use - null until {@link #start} succeeds. */
+    public TorSocksRelay socksRelay() {
+        return socksRelay;
     }
 
     private void kickOffDiscovery() {
@@ -356,6 +375,7 @@ public final class TORClientService extends HTTPService {
     @Override
     public boolean shutdown() {
         updateStatus(ServiceStatus.SHUTTING_DOWN);
+        if (socksRelay != null) { socksRelay.shutdown(); socksRelay = null; }
         super.shutdown();
 //        if(taskRunnerThread!=null)
 //            taskRunnerThread.interrupt();
@@ -375,6 +395,7 @@ public final class TORClientService extends HTTPService {
     @Override
     public boolean gracefulShutdown() {
         updateStatus(ServiceStatus.GRACEFULLY_SHUTTING_DOWN);
+        if (socksRelay != null) { socksRelay.shutdown(); socksRelay = null; }
         super.gracefulShutdown();
 //        if(taskRunnerThread!=null)
 //            taskRunnerThread.interrupt();
