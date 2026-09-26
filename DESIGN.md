@@ -1,4 +1,4 @@
-# tor-client-java — Design
+# tor-java — Design
 
 A `ra.common.network.NetworkService` that runs Tor **embedded** - the real, official Tor
 Project binary - as the Tor **protocol service** for `1m5-core-java` (`1m5-core`
@@ -95,7 +95,7 @@ installer extracts `jniLibs` with exec permission preserved - the same mechanism
 `TORControlConnection` logic directly, given an already-executable path rather than one
 `TorBinary` downloaded. That packaging difference is inherently Gradle/APK-specific and
 can't live in a plain Maven JAR, but it's a thin adapter over shared logic, not a
-reimplementation - see 1m5-remnant's `:transport-tor`. No separate `tor-client-android`
+reimplementation - see 1m5-remnant's `:transport-tor`. No separate `tor-android`
 artifact is needed or planned.
 
 Concretely, this means `EmbeddedTor` (the class, its constructor, `start()`, `control()`,

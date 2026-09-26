@@ -4,12 +4,12 @@
 	<modelVersion>4.0.0</modelVersion>
 
     <groupId>resolvingarchitecture</groupId>
-	<artifactId>tor-client</artifactId>
+	<artifactId>tor</artifactId>
 	<version>1.2.1</version>
 
 	<packaging>jar</packaging>
 
-	<name>ra-tor-client</name>
+	<name>ra-tor</name>
 	<url>https://resolvingarchitecture.io</url>
 	<description>Resolving Architecture - TOR Client</description>
 	<inceptionYear>2018</inceptionYear>
@@ -20,9 +20,9 @@
 	</properties>
 
 	<scm>
-		<connection>scm:git@github.com/resolvingarchitecture/tor-client-java</connection>
-		<developerConnection>scm:git@github.com/resolvingarchitecture/tor-client-java</developerConnection>
-		<url>git@github.com/resolvingarchitecture/tor-client-java</url>
+		<connection>scm:git@github.com/resolvingarchitecture/tor-java</connection>
+		<developerConnection>scm:git@github.com/resolvingarchitecture/tor-java</developerConnection>
+		<url>git@github.com/resolvingarchitecture/tor-java</url>
 	</scm>
 
 	<repositories>
@@ -42,7 +42,7 @@
 
         <dependency>
             <groupId>resolvingarchitecture</groupId>
-            <artifactId>http-client</artifactId>
+            <artifactId>http</artifactId>
             <version>1.2.0</version>
         </dependency>
 

@@ -1,4 +1,4 @@
-# tor-client-java — TODO
+# tor-java — TODO
 
 ## Done
 
@@ -54,8 +54,8 @@
       but none of the others have actually been run on their real platform. Verify each
       before depending on them in production on that OS.
 - [ ] **Same daemon-dependent pattern still exists in this repo's sibling ports**
-      (`tor-client-cpp`, `tor-client-python`, `tor-client-go`, `tor-client-rust`,
-      `tor-client-ts`, `tor-client-cs`) - each has its own `LocalTorDetector` equivalent
+      (`tor-cpp`, `tor-python`, `tor-go`, `tor-rust`,
+      `tor-ts`, `tor-cs`) - each has its own `LocalTorDetector` equivalent
       assuming a pre-installed system daemon, per the multi-language port. Not touched
       by this change; flagged here, not started.
 - [ ] Tor version bump procedure: re-run the PGP verification against
