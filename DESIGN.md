@@ -98,6 +98,14 @@ can't live in a plain Maven JAR, but it's a thin adapter over shared logic, not 
 reimplementation - see 1m5-remnant's `:transport-tor`. No separate `tor-client-android`
 artifact is needed or planned.
 
+Concretely, this means `EmbeddedTor` (the class, its constructor, `start()`, `control()`,
+`socksPort()`, `shutdown()`) and `TorBinary.Provisioned` (the nested type and its
+constructor) are `public`, not package-private - `TorBinary` itself stays effectively
+desktop-only (`resolve()` and its own constructor are package-private), but its
+`Provisioned` result type is a public, freestanding data holder any caller can build
+directly. This was tightened on 2026-09-26 specifically because the Android reuse story
+above was being stated in docs before it was actually true in code.
+
 ## Message flow
 
 **Outbound** - `1m5-core` routes an `Envelope` with a URL (`.onion` or clearnet) and

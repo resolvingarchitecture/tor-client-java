@@ -67,6 +67,10 @@ binary as `jniLibs/<abi>/libtor.so` at APK-build time (the same trick `tor-andro
 itself uses) and drive it with this repo's own `EmbeddedTor`/`TORControlConnection`
 logic directly, given an already-executable path - see 1m5-remnant's `:transport-tor`
 for where that adapter lives; no separate `tor-client-android` artifact is needed.
+`EmbeddedTor` and `TorBinary.Provisioned` (and its constructor) are `public` specifically
+so this is possible: an Android caller builds a `Provisioned` from a binary path it
+discovered itself and hands it straight to `EmbeddedTor.start()`, skipping
+`TorBinary.resolve()` (which stays desktop-only, package-private).
 
 ## Tor External
 Not supported as it breaks the privacy model.

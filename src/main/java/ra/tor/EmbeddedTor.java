@@ -153,7 +153,8 @@ public final class EmbeddedTor {
         sb.append("ControlPortWriteToFile ").append(controlPortFile.getAbsolutePath()).append('\n');
         sb.append("CookieAuthentication 1\n");
         sb.append("CookieAuthFile ").append(cookieFile.getAbsolutePath()).append('\n');
-        sb.append("__OwningControllerProcess ").append(currentPid()).append('\n');
+        Long pid = currentPidOrNull();
+        if (pid != null) sb.append("__OwningControllerProcess ").append(pid).append('\n');
         sb.append("AvoidDiskWrites 1\n");
         sb.append("ClientOnly 1\n");
         sb.append("ExitRelay 0\n");
@@ -243,11 +244,23 @@ public final class EmbeddedTor {
         t.start();
     }
 
-    /** Java 8 target - no {@code ProcessHandle} (Java 9+); the JVM's PID is the numeric prefix of the runtime MX bean's name ("pid@host"). */
-    private static long currentPid() {
-        String name = ManagementFactory.getRuntimeMXBean().getName();
-        int at = name.indexOf('@');
-        return Long.parseLong(at > 0 ? name.substring(0, at) : name);
+    /**
+     * Java 8 target - no {@code ProcessHandle} (Java 9+); the JVM's PID is the numeric prefix
+     * of the runtime MX bean's name ("pid@host"). {@code java.lang.management} is inconsistently
+     * supported on Android's ART runtime (this class also runs there - see {@link
+     * TorBinary}'s javadoc "Android"), so this degrades to omitting
+     * {@code __OwningControllerProcess} entirely rather than failing the whole start - it's a
+     * defense-in-depth self-cleanup guard, not something {@link #shutdown} depends on.
+     */
+    private static Long currentPidOrNull() {
+        try {
+            String name = ManagementFactory.getRuntimeMXBean().getName();
+            int at = name.indexOf('@');
+            return Long.parseLong(at > 0 ? name.substring(0, at) : name);
+        } catch (RuntimeException e) {
+            LOG.fine("could not determine this JVM's pid (" + e + ") - starting without __OwningControllerProcess");
+            return null;
+        }
     }
 
     private static void sleep(long ms) {
