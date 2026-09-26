@@ -24,3 +24,7 @@ target
 /src/test/resources/peerDB
 /src/test/resources/peerGraph
 
+# Embedded Tor runtime state - hidden service private keys, control cookie, per-run torrc.
+# Never committed: generated fresh by TORClientService.start(), sensitive by nature.
+/tor-data/
+

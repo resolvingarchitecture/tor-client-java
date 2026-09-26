@@ -76,13 +76,8 @@ public final class TorSocksRelay {
 
     private volatile ServerSocket serverSocket;
 
-    /** Relays through the real local Tor daemon's own SOCKS port ({@link TORClientService#HOST}/{@link TORClientService#PORT_SOCKS}). */
-    public TorSocksRelay(int port) {
-        this(port, TORClientService.HOST, TORClientService.PORT_SOCKS);
-    }
-
-    /** Test seam: relay through an arbitrary upstream SOCKS5 server instead of the real Tor daemon. */
-    TorSocksRelay(int port, String upstreamHost, int upstreamPort) {
+    /** Relays through {@code upstreamHost}:{@code upstreamPort} - {@link TORClientService} passes its embedded Tor process's own (dynamically-chosen) SOCKS port; tests point this at a fake upstream instead. */
+    public TorSocksRelay(int port, String upstreamHost, int upstreamPort) {
         this.port = port;
         this.upstreamHost = upstreamHost;
         this.upstreamPort = upstreamPort;

@@ -16,39 +16,41 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
-import java.net.Socket;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.logging.Logger;
 
 /**
- * Sets up an HttpClientSensor with the local Tor instance as a proxy (127.0.0.1:9150).
+ * Runs Tor <b>embedded</b>: the real, official Tor Project binary, downloaded once (verified
+ * against a checksum pinned in {@link TorBinary}'s own source, never trusted from the network
+ * alone), spawned and owned directly by this class via a plain {@link ProcessBuilder}, and
+ * driven entirely over its control port using this repo's own {@link TORControlConnection} -
+ * no system Tor daemon, no third-party embedding library, no Kotlin. See {@link EmbeddedTor}
+ * and DESIGN.md "Embedded Tor" for the full rationale and trust model.
+ *
+ * <p>There is deliberately no code path anywhere in this class that looks for, or falls back
+ * to, some other already-running Tor instance - the embedded process this class itself spawns
+ * is the only one it ever uses.
  */
 public final class TORClientService extends HTTPService {
 
     private static final Logger LOG = Logger.getLogger(TORClientService.class.getName());
 
     public static final String HOST = "127.0.0.1";
-    public static final Integer PORT_SOCKS = 9050;
-    public static final Integer PORT_CONTROL = 9051;
-    //    public static final Integer PORT_CONTROL = 9100;
-    public static final Integer PORT_SOCKS_BROWSER = 9150;
-    public static final Integer PORT_HIDDEN_SERVICE = 9151;
     /** {@link TorSocksRelay}'s own listening port - every consumer of this service's Tor
-     *  connectivity connects here, never to {@link #PORT_SOCKS} directly. */
+     *  connectivity connects here, never to the embedded process's own SOCKS port directly. */
     public static final Integer PORT_SOCKS_RELAY = 9052;
 
-    private Process tor;
+    private static final long EMBEDDED_TOR_TIMEOUT_MS = 120_000L;
+
     private final Map<String, NetworkClientSession> sessions = new HashMap<>();
     private Thread taskRunnerThread;
     private volatile TorSocksRelay socksRelay;
+    private volatile EmbeddedTor embeddedTor;
 
     private TORControlConnection controlConnection;
     private TORHiddenService torHiddenService = null;
 
-    private File torUserHome;
-    private File torConfigHome;
-    private File torrcFile;
     private File privKeyFile;
     private File hiddenServiceDir;
     private File hiddenServiceFile;
@@ -63,8 +65,6 @@ public final class TORClientService extends HTTPService {
         super(Network.Tor, producer, observer);
     }
 
-    private final LocalTorDetector localTorDetector = new LocalTorDetector();
-
     /** The network this service carries traffic over. */
     public Network getNetwork() {
         return Network.Tor;
@@ -76,13 +76,6 @@ public final class TORClientService extends HTTPService {
 
     public int randomTORPort() {
         return RandomUtil.nextRandomInteger(10000, 65535);
-    }
-
-    private TORControlConnection getControlConnection() throws IOException {
-        Socket s = new Socket("127.0.0.1", PORT_CONTROL);
-        TORControlConnection conn = new TORControlConnection(s);
-        conn.authenticate(new byte[0]);
-        return conn;
     }
 
     public String getHiddenServiceId() {
@@ -104,41 +97,46 @@ public final class TORClientService extends HTTPService {
             return false;
         }
 
-        proxy = new Proxy(Proxy.Type.SOCKS, new InetSocketAddress(HOST, PORT_SOCKS));
-
-        // Fail fast with a clear message if no local Tor daemon is reachable.
-        if(!localTorDetector.isLocalTorRunning()) {
-            LOG.severe("No local Tor daemon on " + HOST + " (SOCKS " + PORT_SOCKS
-                    + " reachable=" + localTorDetector.isSocksReachable()
-                    + ", control " + PORT_CONTROL + " reachable=" + localTorDetector.isControlReachable()
-                    + "). Install and run Tor with 'ControlPort 9051' and 'CookieAuthentication 0' - see README.md.");
+        LOG.info("Provisioning embedded Tor (downloads and verifies the official binary on first run only)...");
+        updateNetworkStatus(NetworkStatus.CONNECTING);
+        File torCacheDir = new File(SystemSettings.getUserHomeDir(), ".1m5" + File.separator + "tor-bin");
+        File torDataDir = new File(getServiceDirectory(), "tor-data");
+        EmbeddedTor tor = new EmbeddedTor(torDataDir);
+        this.embeddedTor = tor; // assigned before start() so a failure partway through never leaks the spawned process - shutdown() below is always safe to call
+        try {
+            TorBinary.Provisioned bin = new TorBinary(torCacheDir).resolve();
+            tor.start(bin, EMBEDDED_TOR_TIMEOUT_MS);
+            this.controlConnection = tor.control();
+        } catch (IOException e) {
+            LOG.severe("Embedded Tor failed to start: " + e.getMessage());
+            tor.shutdown();
+            this.embeddedTor = null;
             updateNetworkStatus(NetworkStatus.DISCONNECTED);
             updateStatus(ServiceStatus.UNAVAILABLE);
             return false;
         }
 
+        try {
+            socksRelay = new TorSocksRelay(PORT_SOCKS_RELAY, HOST, embeddedTor.socksPort());
+            socksRelay.start();
+        } catch (IOException e) {
+            LOG.severe("could not start TorSocksRelay on port " + PORT_SOCKS_RELAY + ": " + e.getMessage());
+            embeddedTor.shutdown();
+            updateStatus(ServiceStatus.ERROR);
+            updateNetworkStatus(NetworkStatus.ERROR);
+            return false;
+        }
+
+        // Through the relay, not the embedded process's own SOCKS port directly - so this
+        // service's own outbound HTTP fetches (sendOut/fetchOverTor/OPERATION_SEND) pass through
+        // the one path TorSocksRelay's egress-outcome tracking observes, same as every other
+        // consumer of this node's Tor connectivity.
+        proxy = new Proxy(Proxy.Type.SOCKS, new InetSocketAddress(HOST, PORT_SOCKS_RELAY));
+
         LOG.info("Starting underlying HTTP Service...");
         super.start(config);
 
         LOG.info("Initializing TOR Hidden Service...");
-        torUserHome = new File(SystemSettings.getUserHomeDir(), ".tor");
-        if(!torUserHome.exists()) {
-            LOG.severe("TOR User Home does not exist => TOR not installed.");
-            return false;
-        }
-
-        torConfigHome = new File(config.getProperty("ra.tor.config.home"));
-        if(!torConfigHome.exists()) {
-            LOG.severe("TOR Config Home /etc/tor does not exist => TOR not installed.");
-            return false;
-        }
-
-        torrcFile = new File(torConfigHome, "torrc");
-        if(!torrcFile.exists()) {
-            LOG.severe("TOR Config File /etc/tor/torrc does not exist => TOR not installed.");
-            return false;
-        }
-
         if(config.getProperty("ra.tor.hs.name")==null) {
             LOG.severe("ra.tor.hs.name (hidden service directory name) is a required property.");
             return false;
@@ -198,8 +196,6 @@ public final class TORClientService extends HTTPService {
         }
         LOG.info("Starting TOR Hidden Service...");
         try {
-            updateNetworkStatus(NetworkStatus.CONNECTING);
-            controlConnection = getControlConnection();
             Map<String, String> m = controlConnection.getInfo(Arrays.asList("stream-status", "orconn-status", "circuit-status", "version"));
 //            Map<String, String> m = controlConnection.getInfo(Arrays.asList("version"));
             StringBuilder sb = new StringBuilder();
@@ -308,26 +304,12 @@ public final class TORClientService extends HTTPService {
                 return false;
             }
         } catch (IOException e) {
-            if(e.getLocalizedMessage().contains("Connection refused")) {
-                LOG.info("Connection refused. TOR may not be installed and/or running. To install follow README.md in io/onemfive/network/sensors/tor package.");
-
-            } else {
-                LOG.warning(e.getLocalizedMessage());
-            }
+            LOG.warning(e.getLocalizedMessage());
             updateStatus(ServiceStatus.ERROR);
             updateNetworkStatus(NetworkStatus.ERROR);
             return false;
         } catch (NoSuchAlgorithmException e) {
             LOG.warning("TORAlgorithm not supported: "+e.getLocalizedMessage());
-            updateStatus(ServiceStatus.ERROR);
-            updateNetworkStatus(NetworkStatus.ERROR);
-            return false;
-        }
-        try {
-            socksRelay = new TorSocksRelay(PORT_SOCKS_RELAY);
-            socksRelay.start();
-        } catch (IOException e) {
-            LOG.severe("could not start TorSocksRelay on port " + PORT_SOCKS_RELAY + ": " + e.getMessage());
             updateStatus(ServiceStatus.ERROR);
             updateNetworkStatus(NetworkStatus.ERROR);
             return false;
@@ -376,18 +358,8 @@ public final class TORClientService extends HTTPService {
     public boolean shutdown() {
         updateStatus(ServiceStatus.SHUTTING_DOWN);
         if (socksRelay != null) { socksRelay.shutdown(); socksRelay = null; }
+        if (embeddedTor != null) { embeddedTor.shutdown(); embeddedTor = null; }
         super.shutdown();
-//        if(taskRunnerThread!=null)
-//            taskRunnerThread.interrupt();
-//        for(NetworkClientSession session : sessions.values()) {
-//            session.disconnect();
-//            session.close();
-//        }
-//        sessions.clear();
-//        if(tor!=null) {
-//            tor.destroyForcibly();
-//            tor=null;
-//        }
         updateStatus(ServiceStatus.SHUTDOWN);
         return true;
     }
@@ -396,18 +368,8 @@ public final class TORClientService extends HTTPService {
     public boolean gracefulShutdown() {
         updateStatus(ServiceStatus.GRACEFULLY_SHUTTING_DOWN);
         if (socksRelay != null) { socksRelay.shutdown(); socksRelay = null; }
+        if (embeddedTor != null) { embeddedTor.shutdown(); embeddedTor = null; }
         super.gracefulShutdown();
-//        if(taskRunnerThread!=null)
-//            taskRunnerThread.interrupt();
-//        for(NetworkClientSession session : sessions.values()) {
-//            session.disconnect();
-//            session.close();
-//        }
-//        sessions.clear();
-//        if(tor!=null) {
-//            tor.destroy();
-//            tor=null;
-//        }
         updateStatus(ServiceStatus.GRACEFULLY_SHUTDOWN);
         return true;
     }
