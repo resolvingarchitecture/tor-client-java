@@ -78,12 +78,15 @@ public final class TORClientService extends HTTPService {
         return RandomUtil.nextRandomInteger(10000, 65535);
     }
 
+    /** {@code null} before the hidden service exists (start() never ran, failed, or hasn't reached that point yet). */
     public String getHiddenServiceId() {
-        return torHiddenService.serviceId;
+        return torHiddenService != null ? torHiddenService.serviceId : null;
     }
 
+    /** {@code null} under the same conditions as {@link #getHiddenServiceId()}. */
     public String getHiddenServiceURL() {
-        return "http://"+torHiddenService.serviceId+".onion";
+        String id = getHiddenServiceId();
+        return id != null ? "http://" + id + ".onion" : null;
     }
 
     @Override
