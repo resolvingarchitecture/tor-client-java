@@ -12,10 +12,12 @@ import java.net.Proxy;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -50,6 +52,31 @@ class TorSocksRelayTest {
         byte[] reply = connectThroughRelayAndExchange(relayPort, "127.0.0.1", target.port(), "hello".getBytes(StandardCharsets.US_ASCII));
         assertArrayEquals("hello".getBytes(StandardCharsets.US_ASCII), reply);
         assertFalse(relay.egressLikelyBlocked(), "one success should not report blocked");
+    }
+
+    @Test
+    void resolvesAHostnameThroughUpstreamWithoutLocalDns() throws Exception {
+        upstream = new FakeUpstreamSocks(true);
+        upstream.start();
+        relay = new TorSocksRelay(freePort(), "127.0.0.1", upstream.port());
+        relay.start();
+
+        InetAddress resolved = relay.resolve("seed.example.invalid", Duration.ofSeconds(5));
+        assertArrayEquals(new byte[]{10, 0, 0, 1}, resolved.getAddress());
+        assertFalse(relay.egressLikelyBlocked(), "one successful resolve should not report blocked");
+    }
+
+    @Test
+    void resolveThrowsAndCountsAsAFailureWhenUpstreamRefuses() throws Exception {
+        upstream = new FakeUpstreamSocks(false);
+        upstream.start();
+        relay = new TorSocksRelay(freePort(), "127.0.0.1", upstream.port());
+        relay.start();
+
+        for (int i = 0; i < 10; i++) {
+            assertThrows(IOException.class, () -> relay.resolve("seed.example.invalid", Duration.ofSeconds(5)));
+        }
+        assertTrue(relay.egressLikelyBlocked(), "10/10 failed resolves should report likely blocked");
     }
 
     @Test
@@ -185,7 +212,7 @@ class TorSocksRelayTest {
                 out.flush();
 
                 in.read(); // ver
-                in.read(); // cmd
+                int cmd = in.read();
                 in.read(); // rsv
                 int atyp = in.read();
                 String host;
@@ -202,6 +229,16 @@ class TorSocksRelayTest {
                     return;
                 }
                 int port = (in.read() << 8) | in.read();
+
+                if (cmd == 0xF0) { // Tor's RESOLVE extension
+                    if (!succeed) {
+                        out.write(new byte[]{0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0}); // general failure
+                    } else {
+                        out.write(new byte[]{0x05, 0x00, 0x00, 0x01, 10, 0, 0, 1, 0, 0}); // succeeded: 10.0.0.1
+                    }
+                    out.flush();
+                    return;
+                }
 
                 if (!succeed) {
                     out.write(new byte[]{0x05, 0x01, 0x00, 0x01, 0, 0, 0, 0, 0, 0}); // general failure

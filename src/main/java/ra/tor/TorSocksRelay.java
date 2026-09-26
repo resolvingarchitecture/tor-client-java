@@ -8,6 +8,8 @@ import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -28,9 +30,17 @@ import java.util.logging.Logger;
  * {@code ExitPolicy} blocking a non-web port like Bitcoin's 8333 - is exactly
  * the gap this closes; see {@link #egressLikelyBlocked()}.
  *
- * <p>Loopback-only, no-auth SOCKS5, CONNECT command only (no BIND/UDP
- * ASSOCIATE - nothing here needs them). IPv4 and domain-name address types are
- * handled; IPv6 is rejected (unneeded so far, kept out to keep this small).
+ * <p>Loopback-only, no-auth SOCKS5 server; the only command it accepts from a
+ * client is CONNECT (no BIND/UDP ASSOCIATE - nothing here needs them). IPv4
+ * and domain-name address types are handled; IPv6 is rejected (unneeded so
+ * far, kept out to keep this small).
+ *
+ * <p>Separately, {@link #resolve} lets a caller in the same process (e.g.
+ * bitcoinj's DNS-seed peer discovery) resolve a hostname the same
+ * never-touches-local-DNS way a CONNECT with a domain-name target already
+ * does - by speaking Tor's own SOCKS5 {@code RESOLVE} extension directly to
+ * the real upstream daemon, in this class's own client role rather than its
+ * server role above.
  */
 public final class TorSocksRelay {
 
@@ -38,6 +48,8 @@ public final class TorSocksRelay {
 
     private static final int SOCKS_VERSION = 0x05;
     private static final int CMD_CONNECT = 0x01;
+    /** Tor's own SOCKS5 extension (see its {@code socks-extensions.txt}) - not part of the base RFC 1928 command set. */
+    private static final int CMD_RESOLVE = 0xF0;
     private static final int ATYP_IPV4 = 0x01;
     private static final int ATYP_DOMAIN = 0x03;
     private static final int ATYP_IPV6 = 0x04;
@@ -111,6 +123,75 @@ public final class TorSocksRelay {
         int i = Math.floorMod(outcomeCursor.getAndIncrement(), OUTCOME_WINDOW);
         synchronized (recentOutcomes) { recentOutcomes[i] = success; }
         outcomesRecorded.incrementAndGet();
+    }
+
+    /**
+     * Resolves {@code hostname} to a single {@link InetAddress} using Tor's own SOCKS5
+     * {@code RESOLVE} extension (command {@code 0xF0}) against the real upstream Tor daemon -
+     * never the local/system DNS resolver, unlike {@link InetAddress#getAllByName}. Exists so a
+     * caller that needs to look a hostname up (not connect to it) - e.g. bitcoinj's DNS-seed
+     * peer discovery - can do so without leaking that lookup outside Tor. Returns exactly one
+     * address per call: Tor's extension answers with a single resolved address, not a full
+     * DNS A-record set, so a caller wanting several candidates should call this once per
+     * hostname it already knows about (e.g. once per configured DNS seed) rather than expecting
+     * one hostname to fan out into many.
+     *
+     * <p>The JDK's {@code Proxy}/{@code Socket} SOCKS support (used by {@link #handle} for
+     * CONNECT) has no API for a non-CONNECT SOCKS5 command, so this method speaks the protocol
+     * itself, in this class's client role rather than its server role.
+     */
+    public InetAddress resolve(String hostname, Duration timeout) throws IOException {
+        byte[] nameBytes = hostname.getBytes(StandardCharsets.US_ASCII);
+        if (nameBytes.length > 255) throw new IOException("hostname too long for SOCKS5: " + hostname);
+        int timeoutMs = (int) Math.max(1, timeout.toMillis());
+        try (Socket upstream = new Socket()) {
+            upstream.connect(new InetSocketAddress(upstreamHost, upstreamPort), UPSTREAM_CONNECT_TIMEOUT_MS);
+            upstream.setSoTimeout(timeoutMs);
+            InputStream in = upstream.getInputStream();
+            OutputStream out = upstream.getOutputStream();
+
+            out.write(new byte[]{SOCKS_VERSION, 0x01, 0x00}); // 1 method offered: no-auth
+            out.flush();
+            int greetVer = readByte(in);
+            int greetMethod = readByte(in);
+            if (greetVer != SOCKS_VERSION || greetMethod != 0x00) {
+                recordOutcome(false);
+                throw new IOException("upstream SOCKS5 greeting failed (ver=" + greetVer + " method=" + greetMethod + ")");
+            }
+
+            byte[] request = new byte[7 + nameBytes.length];
+            request[0] = SOCKS_VERSION;
+            request[1] = (byte) CMD_RESOLVE;
+            request[2] = 0x00; // reserved
+            request[3] = ATYP_DOMAIN;
+            request[4] = (byte) nameBytes.length;
+            System.arraycopy(nameBytes, 0, request, 5, nameBytes.length);
+            // trailing 2-byte port is unused by RESOLVE - left as 0
+            out.write(request);
+            out.flush();
+
+            int replyVer = readByte(in);
+            int rep = readByte(in);
+            readByte(in); // reserved
+            int atyp = readByte(in);
+            byte[] addr;
+            switch (atyp) {
+                case ATYP_IPV4: addr = new byte[4]; break;
+                case ATYP_IPV6: addr = new byte[16]; break;
+                default:
+                    recordOutcome(false);
+                    throw new IOException("upstream RESOLVE reply had unsupported address type " + atyp);
+            }
+            readFully(in, addr);
+            readByte(in); readByte(in); // BND.PORT - unused
+
+            if (replyVer != SOCKS_VERSION || rep != REP_SUCCEEDED) {
+                recordOutcome(false);
+                throw new IOException("upstream RESOLVE of " + hostname + " failed, SOCKS5 reply code " + rep);
+            }
+            recordOutcome(true);
+            return InetAddress.getByAddress(hostname, addr);
+        }
     }
 
     private void acceptLoop() {
