@@ -85,7 +85,7 @@ public final class TorSocksRelay {
 
     /** Starts accepting connections; safe to call once. Throws if the port can't be bound. */
     public void start() throws IOException {
-        serverSocket = new ServerSocket(port, 50, InetAddress.getLoopbackAddress());
+        serverSocket = new ServerSocket(port, 50, InetAddress.getByAddress(new byte[]{127, 0, 0, 1}));
         LOG.info("TorSocksRelay listening on 127.0.0.1:" + port);
         acceptExecutor.execute(this::acceptLoop);
     }
@@ -215,9 +215,9 @@ public final class TorSocksRelay {
             try {
                 upstream = new Socket(new Proxy(Proxy.Type.SOCKS,
                         new InetSocketAddress(upstreamHost, upstreamPort)));
-                upstream.connect(new InetSocketAddress(target.host, target.port), UPSTREAM_CONNECT_TIMEOUT_MS);
+                upstream.connect(InetSocketAddress.createUnresolved(target.host, target.port), UPSTREAM_CONNECT_TIMEOUT_MS);
             } catch (IOException e) {
-                LOG.fine("upstream connect to " + target.host + ":" + target.port + " failed: " + e.getMessage());
+                LOG.warning("upstream connect to " + target.host + ":" + target.port + " failed: " + e.getMessage());
                 recordOutcome(false);
                 reply(out, REP_GENERAL_FAILURE);
                 return;
@@ -225,6 +225,7 @@ public final class TorSocksRelay {
             recordOutcome(true);
             try (Socket u = upstream) {
                 reply(out, REP_SUCCEEDED);
+                c.setSoTimeout(0);
                 relay(c, u);
             }
         } catch (IOException e) {

@@ -928,7 +928,7 @@ public class TORControlConnection implements TORControlCommands {
 
     private String getPemPrivateKey(String keyBytes, String algorithm) {
         // we do not need to construct anything in case Tor is about to generate a key
-        if (keyBytes.startsWith("NEW"))
+        if (keyBytes.startsWith("NEW") || keyBytes.startsWith("ED25519-V3:") || keyBytes.startsWith("RSA1024:"))
             return keyBytes;
 
         // cleanup PEM artifacts

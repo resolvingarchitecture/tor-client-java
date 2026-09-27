@@ -13,6 +13,9 @@ public class TORHiddenService extends JSON {
 
     public TORHiddenService() {}
 
+    /** Secret key for local persistence only; excluded from public metadata. */
+    public String privateKey() { return privateKey; }
+
     @Override
     public Map<String, Object> toMap() {
         Map<String,Object> m = super.toMap();

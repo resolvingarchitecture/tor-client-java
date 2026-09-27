@@ -7,7 +7,6 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.lang.management.ManagementFactory;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -44,12 +43,18 @@ public final class EmbeddedTor {
     private static final Pattern BOOTSTRAP_PROGRESS = Pattern.compile("PROGRESS=(\\d+)");
 
     private final File dataDir;
+    private final Long ownerPid;
     private volatile Process process;
     private volatile TORControlConnection control;
     private volatile int socksPort = -1;
 
     public EmbeddedTor(File dataDir) {
+        this(dataDir, currentPidOrNull());
+    }
+
+    public EmbeddedTor(File dataDir, Long ownerPid) {
         this.dataDir = dataDir;
+        this.ownerPid = ownerPid;
     }
 
     /** The authenticated control connection - only valid after {@link #start} returns successfully. */
@@ -84,6 +89,10 @@ public final class EmbeddedTor {
 
         File cookieFile = new File(dataDir, "control_auth_cookie");
         File controlPortFile = new File(dataDir, "control_port");
+        if (isAlive()) throw new IOException("embedded Tor is already running");
+        for (File stale : new File[]{cookieFile, controlPortFile}) {
+            if (stale.exists() && !stale.delete()) throw new IOException("could not remove stale " + stale.getName());
+        }
         File torrc = writeTorrc(bin, cookieFile, controlPortFile);
 
         List<String> cmd = new ArrayList<>();
@@ -153,7 +162,7 @@ public final class EmbeddedTor {
         sb.append("ControlPortWriteToFile ").append(controlPortFile.getAbsolutePath()).append('\n');
         sb.append("CookieAuthentication 1\n");
         sb.append("CookieAuthFile ").append(cookieFile.getAbsolutePath()).append('\n');
-        Long pid = currentPidOrNull();
+        Long pid = ownerPid;
         if (pid != null) sb.append("__OwningControllerProcess ").append(pid).append('\n');
         sb.append("AvoidDiskWrites 1\n");
         sb.append("ClientOnly 1\n");
@@ -167,8 +176,9 @@ public final class EmbeddedTor {
         return torrc;
     }
 
-    private static void awaitFile(File f, long deadline) throws IOException {
-        while (!f.exists()) {
+    private void awaitFile(File f, long deadline) throws IOException {
+        while (!f.exists() || f.length() == 0) {
+            if (!isAlive()) throw new IOException("Tor exited while waiting for " + f.getName());
             if (System.currentTimeMillis() > deadline) {
                 throw new IOException("timed out waiting for " + f.getName());
             }
@@ -254,10 +264,13 @@ public final class EmbeddedTor {
      */
     private static Long currentPidOrNull() {
         try {
-            String name = ManagementFactory.getRuntimeMXBean().getName();
+            Class<?> factory = Class.forName("java.lang.management.ManagementFactory");
+            Object bean = factory.getMethod("getRuntimeMXBean").invoke(null);
+            String name = (String) Class.forName("java.lang.management.RuntimeMXBean")
+                    .getMethod("getName").invoke(bean);
             int at = name.indexOf('@');
             return Long.parseLong(at > 0 ? name.substring(0, at) : name);
-        } catch (RuntimeException e) {
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
             LOG.fine("could not determine this JVM's pid (" + e + ") - starting without __OwningControllerProcess");
             return null;
         }
