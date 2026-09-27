@@ -137,7 +137,12 @@ public final class TORClientService extends HTTPService {
         proxy = new Proxy(Proxy.Type.SOCKS, new InetSocketAddress(HOST, PORT_SOCKS_RELAY));
 
         LOG.info("Starting underlying HTTP Service...");
-        super.start(config);
+        try {
+            super.start(config);
+        } catch (Throwable t) {
+            LOG.severe("super.start(config) (underlying HTTP Service) threw: " + t);
+            return false;
+        }
 
         LOG.info("Initializing TOR Hidden Service...");
         if(config.getProperty("ra.tor.hs.name")==null) {

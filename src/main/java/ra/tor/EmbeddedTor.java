@@ -234,7 +234,7 @@ public final class EmbeddedTor {
             try (BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = r.readLine()) != null) {
-                    LOG.fine("[embedded-tor] " + line);
+                    LOG.info("[embedded-tor] " + line);
                 }
             } catch (IOException ignored) {
                 // process ended - normal
