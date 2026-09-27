@@ -133,9 +133,21 @@ public final class TorSocksRelay {
      *
      * <p>The JDK's {@code Proxy}/{@code Socket} SOCKS support (used by {@link #handle} for
      * CONNECT) has no API for a non-CONNECT SOCKS5 command, so this method speaks the protocol
-     * itself, in this class's client role rather than its server role.
+     * itself, in this class's client role rather than its server role. Counts toward {@link
+     * #egressLikelyBlocked()} - see {@link #resolve(String, Duration, boolean)} for a variant
+     * that doesn't.
      */
     public InetAddress resolve(String hostname, Duration timeout) throws IOException {
+        return resolve(hostname, timeout, true);
+    }
+
+    /**
+     * Same as {@link #resolve(String, Duration)}, but {@code trackOutcome=false} skips {@link
+     * #recordOutcome} entirely - for a caller with a naturally high, expected failure rate (e.g.
+     * Bitcoin DNS-seed lookups: not every seed answers, that says nothing about Tor's own health)
+     * that would otherwise pollute {@link #egressLikelyBlocked()}'s shared rolling window.
+     */
+    public InetAddress resolve(String hostname, Duration timeout, boolean trackOutcome) throws IOException {
         byte[] nameBytes = hostname.getBytes(StandardCharsets.US_ASCII);
         if (nameBytes.length > 255) throw new IOException("hostname too long for SOCKS5: " + hostname);
         int timeoutMs = (int) Math.max(1, timeout.toMillis());
@@ -150,7 +162,7 @@ public final class TorSocksRelay {
             int greetVer = readByte(in);
             int greetMethod = readByte(in);
             if (greetVer != SOCKS_VERSION || greetMethod != 0x00) {
-                recordOutcome(false);
+                if (trackOutcome) recordOutcome(false);
                 throw new IOException("upstream SOCKS5 greeting failed (ver=" + greetVer + " method=" + greetMethod + ")");
             }
 
@@ -169,22 +181,26 @@ public final class TorSocksRelay {
             int rep = readByte(in);
             readByte(in); // reserved
             int atyp = readByte(in);
+            // Checked before interpreting atyp - a real finding: a failed RESOLVE (rep !=
+            // REP_SUCCEEDED, e.g. the seed genuinely didn't answer) can carry atyp=0 (nothing to
+            // report), which used to be misreported as "unsupported address type 0" instead of
+            // the real, far more informative "RESOLVE failed, reply code N".
+            if (replyVer != SOCKS_VERSION || rep != REP_SUCCEEDED) {
+                if (trackOutcome) recordOutcome(false);
+                throw new IOException("upstream RESOLVE of " + hostname + " failed, SOCKS5 reply code " + rep);
+            }
             byte[] addr;
             switch (atyp) {
                 case ATYP_IPV4: addr = new byte[4]; break;
                 case ATYP_IPV6: addr = new byte[16]; break;
                 default:
-                    recordOutcome(false);
+                    if (trackOutcome) recordOutcome(false);
                     throw new IOException("upstream RESOLVE reply had unsupported address type " + atyp);
             }
             readFully(in, addr);
             readByte(in); readByte(in); // BND.PORT - unused
 
-            if (replyVer != SOCKS_VERSION || rep != REP_SUCCEEDED) {
-                recordOutcome(false);
-                throw new IOException("upstream RESOLVE of " + hostname + " failed, SOCKS5 reply code " + rep);
-            }
-            recordOutcome(true);
+            if (trackOutcome) recordOutcome(true);
             return InetAddress.getByAddress(hostname, addr);
         }
     }

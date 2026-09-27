@@ -78,6 +78,19 @@ public final class TORClientService extends HTTPService {
         return RandomUtil.nextRandomInteger(10000, 65535);
     }
 
+    /**
+     * The embedded process's own SOCKS port, bypassing {@link TorSocksRelay} entirely - for a
+     * caller with a naturally high, expected connection-failure rate (e.g. Bitcoin peer
+     * discovery: most candidate addresses are offline, that's normal P2P churn, not a sign Tor
+     * itself is blocked) that would otherwise pollute {@link TorSocksRelay#egressLikelyBlocked()}'s
+     * shared rolling window and make the rest of this node wrongly think Tor egress is down.
+     * {@code -1} before the embedded process has started.
+     */
+    public int rawSocksPort() {
+        EmbeddedTor tor = embeddedTor;
+        return tor != null ? tor.socksPort() : -1;
+    }
+
     /** {@code null} before the hidden service exists (start() never ran, failed, or hasn't reached that point yet). */
     public String getHiddenServiceId() {
         return torHiddenService != null ? torHiddenService.serviceId : null;
